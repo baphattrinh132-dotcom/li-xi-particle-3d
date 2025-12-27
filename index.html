@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Lì xì Particle 3D</title>
+  <style>
+    html, body { margin:0; height:100%; overflow:hidden; background:#05050a; }
+    canvas { display:block; }
+
+    .ui{
+      position:fixed; inset:0;
+      display:flex; align-items:flex-start; justify-content:center;
+      pointer-events:none;
+      color:rgba(255,255,255,.92);
+      font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    }
+    .panel{
+      margin-top:18px;
+      width:min(640px, calc(100vw - 24px));
+      background:rgba(0,0,0,.28);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;
+      padding:14px 14px;
+      backdrop-filter: blur(8px);
+      pointer-events:auto;
+    }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .title{ font-weight:700; letter-spacing:.2px; }
+    .muted{ opacity:.85; }
+    .badge{
+      display:inline-block;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.25);
+      opacity:.95;
+      font-size:12px;
+    }
+    input[type="text"]{
+      flex:1;
+      min-width:200px;
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.15);
+      background:rgba(0,0,0,.35);
+      color:rgba(255,255,255,.95);
+      padding:10px 12px;
+      outline:none;
+    }
+    button{
+      border-radius:10px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.08);
+      color:rgba(255,255,255,.95);
+      padding:10px 12px;
+      cursor:pointer;
+    }
+    button:hover{ background:rgba(255,255,255,.12); }
+
+    .messageBox{
+      margin-top:12px;
+      padding:12px 12px;
+      border-radius:12px;
+      background:rgba(0,0,0,.30);
+      border:1px solid rgba(255,255,255,.08);
+      display:none;
+    }
+    .bigWish{
+      font-size:18px;
+      font-weight:700;
+      margin-top:8px;
+      line-height:1.35;
+    }
+    .hint{ margin-top:8px; opacity:.85; }
+ 
+
+  </style>
+</head>
+<body>
+  <div class="ui">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;">
+        <div class="title">🧧 Lì xì Particle 3D</div>
+        <div class="badge">Kéo để xoay • Lăn để zoom • Click để bóc</div>
+      </div>
+
+      <div id="nameRow" class="row" style="margin-top:10px;">
+        <input id="nameInput" type="text" placeholder="Nhập tên của bạn…" maxlength="32" />
+        <button id="startBtn">Bắt đầu</button>
+      </div>
+
+      <div id="greetRow" class="muted" style="margin-top:10px; display:none;"></div>
+
+      <div id="msgBox" class="messageBox">
+        <div class="muted" id="msgPrefix"></div>
+        <div class="bigWish" id="msgText"></div>
+        <div class="hint muted" id="msgHint"></div>
+      </div>
+      <div class="hint muted" id="statusHint" style="margin-top:10px;">
+        Nhập tên → sau đó click vào bao lì xì để “bóc”.
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+    import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+    import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+
+    // =========================
+    // 1) DANH SÁCH THÔNG ĐIỆP (SỬA Ở ĐÂY)
+    // =========================
+    const WISHES = [
+      "Chúc bạn năm mới an khang thịnh vượng, vạn sự như ý!",
+      "Chúc bạn học giỏi – điểm cao – thi đâu đậu đó!",
+      "Chúc bạn sức khỏe dồi dào, gia đình hạnh phúc, tiền vào như nước!",
+      "Chúc bạn luôn vui vẻ, tự tin, làm gì cũng thuận lợi và gặp nhiều may mắn!",
+      "Chúc bạn một năm mới bứt phá, đạt được mục tiêu và có thật nhiều trải nghiệm đẹp!"
+    ];
+
+    // =========================
+    // 2) UI
+    // =========================
+    const nameRow = document.getElementById("nameRow");
+    const greetRow = document.getElementById("greetRow");
+    const msgBox = document.getElementById("msgBox");
+    const msgPrefix = document.getElementById("msgPrefix");
+    const msgText = document.getElementById("msgText");
+    const msgHint = document.getElementById("msgHint");
+    const statusHint = document.getElementById("statusHint");
+    const nameInput = document.getElementById("nameInput");
+    const startBtn = document.getElementById("startBtn");
+
+    let userName = "";
+    let hasStarted = false;
+    let hasOpened = false;
+
+    function pickRandomWish(){
+      return WISHES[(Math.random() * WISHES.length) | 0];
+    }
+
+    function startFlow(){
+      const raw = (nameInput.value || "").trim();
+      userName = raw.length ? raw : "bạn";
+      hasStarted = true;
+
+      nameRow.style.display = "none";
+      greetRow.style.display = "block";
+      greetRow.textContent = `Gửi ${userName}, mời bạn bóc phong thư (click vào bao lì xì).`;
+      statusHint.textContent = "Click vào bao lì xì để mở lì xì ✨";
+    }
+
+    startBtn.addEventListener("click", startFlow);
+    nameInput.addEventListener("keydown", (e)=>{ if(e.key==="Enter") startFlow(); });
+
+    // =========================
+    // 3) THREE SETUP
+    // =========================
+    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.10;
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x070713, 0.030);
+
+    const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 280);
+    camera.position.set(0.9, 3.6, 14.5);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 8;
+    controls.maxDistance = 45;
+    controls.target.set(0, 2.8, 0);
+
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(
+      new THREE.Vector2(innerWidth, innerHeight),
+      0.75, // strength
+      0.25, // radius
+      0.23  // threshold
+    );
+    composer.addPass(bloom);
+
+    // =========================
+    // 4) GLOW TEXTURE
+    // =========================
+    function makeGlowTexture(){
+      const s = 160;
+      const c = document.createElement("canvas");
+      c.width = c.height = s;
+      const g = c.getContext("2d");
+      const grd = g.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2);
+      grd.addColorStop(0.0, "rgba(255,255,255,1)");
+      grd.addColorStop(0.18, "rgba(255,255,255,0.95)");
+      grd.addColorStop(0.45, "rgba(255,255,255,0.35)");
+      grd.addColorStop(1.0, "rgba(255,255,255,0)");
+      g.fillStyle = grd;
+      g.fillRect(0,0,s,s);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+    const glowTex = makeGlowTexture();
+
+    // =========================
+    // 5) STARFIELD (DÀY)
+    // =========================
+    function createStars(count = 32000){
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+
+      for(let i=0;i<count;i++){
+        const r = 150;
+        const d = Math.random();
+        const rr = r * Math.pow(d, 0.25); // bias về gần
+
+        const a = Math.random() * Math.PI * 2;
+        const b = Math.acos(2 * Math.random() - 1);
+
+        const x = rr * Math.sin(b) * Math.cos(a);
+        const y = rr * Math.cos(b);
+        const z = rr * Math.sin(b) * Math.sin(a);
+
+        positions[i*3+0] = x;
+        positions[i*3+1] = y;
+        positions[i*3+2] = z;
+
+        const brightness = (Math.random() < 0.18) ? 1.0 : (0.35 + Math.random()*0.4);
+        colors[i*3+0] = 0.85 * brightness;
+        colors[i*3+1] = 0.90 * brightness;
+        colors[i*3+2] = 1.00 * brightness;
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+
+      const mat = new THREE.PointsMaterial({
+        size: 0.12,
+        map: glowTex,
+        transparent: true,
+        depthWrite: false,
+        depthTest: false,
+        blending: THREE.AdditiveBlending,
+        vertexColors: true,
+        opacity: 0.95
+      });
+
+      return new THREE.Points(geo, mat);
+    }
+    scene.add(createStars());
+
+    // =========================
+    // 6) SHADER POINT MATERIAL
+    // =========================
+    function makePointsMaterial({ baseSize = 170, twinkle = 0.9 } = {}) {
+      return new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: {
+          uMap: { value: glowTex },
+          uTime: { value: 0 },
+          uPixelRatio: { value: Math.min(devicePixelRatio, 2) },
+          uBaseSize: { value: baseSize },
+          uTwinkle: { value: twinkle }
+        },
+        vertexShader: `
+          attribute float aSize;
+          attribute vec3 color;
+          varying vec3 vColor;
+          uniform float uTime;
+          uniform float uPixelRatio;
+          uniform float uBaseSize;
+          uniform float uTwinkle;
+
+          void main(){
+            vColor = color;
+            vec4 mv = modelViewMatrix * vec4(position, 1.0);
+
+            float tw = 1.0;
+            if (uTwinkle > 0.0) {
+              tw = 0.88
+                + 0.16 * sin(uTime * 2.0 + position.x * 2.8 + position.y * 1.4)
+                + 0.06 * sin(uTime * 5.0 + position.z * 5.2);
+              tw = mix(1.0, tw, uTwinkle);
+            }
+
+            gl_PointSize = (uBaseSize * aSize * tw) * uPixelRatio * (1.0 / -mv.z);
+            gl_Position = projectionMatrix * mv;
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D uMap;
+          varying vec3 vColor;
+
+          void main(){
+            vec4 tex = texture2D(uMap, gl_PointCoord);
+            float core = pow(tex.a, 0.42);
+            vec3 col = vColor * (1.35 + 1.75 * core);
+            gl_FragColor = vec4(col, core);
+          }
+        `
+      });
+    }
+
+    // =========================
+    // 7) ENVELOPE OUTLINE (KHÔNG MÉO)
+    // =========================
+    function lerp(a,b,t){ return a + (b-a)*t; }
+
+    function buildEnvelopePointsOutline({
+      count = 17000,
+      w = 6.0,
+      h = 8.0,
+      thickness = 0.18,
+      centerY = 2.8
+    } = {}) {
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      const sizes = new Float32Array(count);
+
+      const red = new THREE.Color("#ff2b2b");
+      const gold = new THREE.Color("#ffd24a");
+
+      const bodyTopY = h/2;
+      const bodyBottomY = -h/2 + h*0.25;   // nâng đáy thân lên (đúng phong bì)
+      const innerY = h/2 - h*0.38;         // miệng phong bì
+
+      function edgePoint(x, y) {
+        return {
+          x: x + (Math.random()*2-1)*0.035,
+          y: y + (Math.random()*2-1)*0.035,
+          z: (Math.random()*2-1)*thickness
+        };
+      }
+
+      function edge(x1,y1,x2,y2,t){
+        return { x: x1 + (x2-x1)*t, y: y1 + (y2-y1)*t };
+      }
+
+      for (let i=0;i<count;i++){
+        const ix = i*3;
+        const r = Math.random();
+        let p2;
+
+        if (r < 0.78) {
+          const t = Math.random();
+          const pick = Math.random();
+
+          if (pick < 0.22) {
+            // trái
+            const p = edge(-w/2, bodyBottomY, -w/2, bodyTopY, t);
+            p2 = edgePoint(p.x, p.y);
+          } else if (pick < 0.44) {
+            // phải
+            const p = edge(w/2, bodyBottomY, w/2, bodyTopY, t);
+            p2 = edgePoint(p.x, p.y);
+          } else if (pick < 0.62) {
+            // đáy thân
+            const p = edge(-w/2, bodyBottomY, w/2, bodyBottomY, t);
+            p2 = edgePoint(p.x, p.y);
+          } else   {
+            // trên ngoài
+            const p = edge(-w/2, bodyTopY, w/2, bodyTopY, t);
+            p2 = edgePoint(p.x, p.y);
+          } 
+        } else {
+          // nắp tam giác (2 cạnh chéo)
+          const t = Math.random();
+          const A = { x: -w/2, y: bodyTopY };
+          const B = { x:  w/2, y: bodyTopY };
+          const C = { x: 0.0,  y: innerY };
+          const which = (Math.random() < 0.5);
+          const E0 = which ? A : C;
+          const E1 = which ? C : B;
+          const p = edge(E0.x, E0.y, E1.x, E1.y, t);
+          p2 = edgePoint(p.x, p.y);
+        }
+
+        positions[ix+0] = p2.x;
+        positions[ix+1] = p2.y + centerY;
+        positions[ix+2] = p2.z;
+
+        const isGold = Math.random() < 0.12;
+        const c = isGold ? gold : red;
+        const boost = isGold ? 2.15 : 1.55;
+
+        colors[ix+0] = c.r * boost;
+        colors[ix+1] = c.g * boost;
+        colors[ix+2] = c.b * boost;
+
+        sizes[i] = isGold ? (0.30 + Math.random()*0.35) : (0.10 + Math.random()*0.22);
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      geo.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
+
+      const mat = makePointsMaterial({ baseSize: 175, twinkle: 0.9 });
+      const pts = new THREE.Points(geo, mat);
+
+      pts.userData.envelopeBounds = { w, h, centerY };
+      return { pts, mat };
+    }
+
+    // Group
+    const envelopeGroup = new THREE.Group();
+    scene.add(envelopeGroup);
+
+    const envelope = buildEnvelopePointsOutline({ count: 17000, w: 6.0, h: 8.0, thickness: 0.18, centerY: 2.8 });
+    envelopeGroup.add(envelope.pts);
+// =========================
+// 7.5) CHỮ "CUS" XOAY THEO PHONG BÌ (KHÔNG BILLBOARD)
+// =========================
+function makeTextPlane(text){
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = 1024;
+  canvas.height = 512;
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.font = "900 140px system-ui, Segoe UI, Arial";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  // glow
+  ctx.shadowColor = "rgba(255,210,74,0.9)";
+  ctx.shadowBlur = 40;
+  ctx.fillStyle = "#ffd24a";
+  ctx.fillText(text, canvas.width/2, canvas.height/2);
+
+  ctx.shadowColor = "rgba(255,80,0,0.6)";
+  ctx.shadowBlur = 80;
+  ctx.fillText(text, canvas.width/2, canvas.height/2);
+
+  ctx.shadowBlur = 0;
+  ctx.fillText(text, canvas.width/2, canvas.height/2);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex,
+    transparent: true,
+    depthWrite: false
+  });
+
+  const geo = new THREE.PlaneGeometry(6.8, 3.2);
+  return new THREE.Mesh(geo, mat);
+}
+
+// tạo chữ CUS mặt trước
+const cusFront = makeTextPlane("CUS");
+cusFront.position.set(0, 2.3, 0.6);   // z dương: mặt trước
+envelopeGroup.add(cusFront);
+
+// tạo chữ CUS mặt sau
+const cusBack = makeTextPlane("CUS");
+cusBack.position.set(0, 2.3, -0.6);   // z âm: mặt sau
+cusBack.rotation.y = Math.PI;         // xoay 180° để chữ không bị ngược
+envelopeGroup.add(cusBack);
+
+
+
+    // nền tối dưới
+    const groundGeo = new THREE.CircleGeometry(9.2, 96);
+    const groundMat = new THREE.MeshBasicMaterial({ color: 0x07071a, transparent:true, opacity:0.75 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI/2;
+    ground.position.y = -0.12;
+    scene.add(ground);
+
+    // =========================
+    // 8) MORPH -> DUST CLOUD (CLICK)
+    // =========================
+    function makeMorphToCloud(points, {
+      cloudRadius = 8.2,
+      squashY = 0.70,
+      noise = 1.05,
+      morphSpeed = 8.0,
+      drift = 0.75,
+      recenter = 0.35,
+      center = new THREE.Vector3(0, 2.9, 0)
+    } = {}) {
+      const posAttr = points.geometry.getAttribute("position");
+      const count = posAttr.count;
+
+      const base = new Float32Array(posAttr.array);
+      const cloud = new Float32Array(count * 3);
+      const cloud0 = new Float32Array(count * 3);
+      const vel = new Float32Array(count * 3);
+
+      // tạo cloud dạng cụm
+      const nucleiCount = 18;
+      const nuclei = [];
+      for (let n=0;n<nucleiCount;n++){
+        const a = Math.random() * Math.PI * 2;
+        const b = Math.acos(2 * Math.random() - 1);
+        const rr = cloudRadius * (0.20 + 0.60*Math.random());
+        nuclei.push({
+          x: rr*Math.sin(b)*Math.cos(a),
+          y: rr*Math.cos(b)*squashY,
+          z: rr*Math.sin(b)*Math.sin(a)
+        });
+      }
+
+      for (let i=0;i<count;i++){
+        const ix = i*3;
+        const k = (Math.random()*nucleiCount)|0;
+        const n = nuclei[k];
+
+        const spread = 0.9 + Math.random()*1.15;
+        let x = n.x + (Math.random()*2-1)*noise*spread;
+        let y = n.y + (Math.random()*2-1)*noise*spread*0.9;
+        let z = n.z + (Math.random()*2-1)*noise*spread;
+
+        x += center.x; y += center.y; z += center.z;
+
+        cloud[ix+0]=x; cloud[ix+1]=y; cloud[ix+2]=z;
+        cloud0[ix+0]=x; cloud0[ix+1]=y; cloud0[ix+2]=z;
+
+        vel[ix+0] = (Math.random()*2-1)*drift;
+        vel[ix+1] = (Math.random()*2-1)*drift*0.55;
+        vel[ix+2] = (Math.random()*2-1)*drift;
+      }
+
+      points.userData.__morph = {
+        posAttr, count, base, cloud, cloud0, vel,
+        mode: "base",
+        mix: 0,
+        morphSpeed, drift, recenter
+      };
+
+      points.userData.toCloud = ()=>{ points.userData.__morph.mode = "cloud"; };
+      points.userData.toBase  = ()=>{ points.userData.__morph.mode = "base"; };
+
+      points.userData.updateMorph = (dt)=>{
+        const st = points.userData.__morph;
+        const arr = st.posAttr.array;
+
+        const target = (st.mode === "cloud") ? 1 : 0;
+        const speed  = (st.mode === "cloud") ? st.morphSpeed : 2.2;
+        st.mix += (target - st.mix) * (1.0 - Math.exp(-speed * dt));
+
+        const inCloud = st.mix > 0.02;
+        const swirl = (st.mode === "cloud") ? 0.45 : 0.0;
+
+        for (let i=0;i<st.count;i++){
+          const ix = i*3;
+          const bx = st.base[ix+0], by = st.base[ix+1], bz = st.base[ix+2];
+
+          let cx = st.cloud[ix+0], cy = st.cloud[ix+1], cz = st.cloud[ix+2];
+
+          if (inCloud) {
+            cx += st.vel[ix+0] * dt;
+            cy += st.vel[ix+1] * dt;
+            cz += st.vel[ix+2] * dt;
+
+            // swirl nhẹ
+            const x = cx, z = cz;
+            const a = swirl * dt;
+            cx = x*Math.cos(a) - z*Math.sin(a);
+            cz = x*Math.sin(a) + z*Math.cos(a);
+
+            // kéo về cụm gốc
+            const c0x = st.cloud0[ix+0], c0y = st.cloud0[ix+1], c0z = st.cloud0[ix+2];
+            cx += (c0x - cx) * st.recenter * dt;
+            cy += (c0y - cy) * st.recenter * dt;
+            cz += (c0z - cz) * st.recenter * dt;
+
+            st.cloud[ix+0]=cx; st.cloud[ix+1]=cy; st.cloud[ix+2]=cz;
+          }
+
+          arr[ix+0] = bx + (cx - bx) * st.mix;
+          arr[ix+1] = by + (cy - by) * st.mix;
+          arr[ix+2] = bz + (cz - bz) * st.mix;
+        }
+
+        st.posAttr.needsUpdate = true;
+      };
+    }
+
+    makeMorphToCloud(envelope.pts, {
+      cloudRadius: 8.5,
+      squashY: 0.70,
+      noise: 1.10,
+      morphSpeed: 8.5,
+      drift: 0.85,
+      recenter: 0.38,
+      center: new THREE.Vector3(0, 2.95, 0)
+    });
+
+    // =========================
+    // 9) CLICK HIT TEST
+    // =========================
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    const plane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
+
+    function hitEnvelope(clientX, clientY){
+      mouse.x = (clientX / innerWidth) * 2 - 1;
+      mouse.y = -(clientY / innerHeight) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+
+      const p = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(plane, p)) return false;
+
+      const b = envelope.pts.userData.envelopeBounds;
+      const halfW = b.w / 2;
+      const halfH = b.h / 2;
+
+      const localX = p.x;
+      const localY = p.y - b.centerY;
+
+      return (localX >= -halfW && localX <= halfW && localY >= -halfH && localY <= halfH);
+    }
+
+    function openEnvelope(){
+      if (!hasStarted || hasOpened) return;
+      hasOpened = true;
+
+      envelope.pts.userData.toCloud();
+
+      const wish = pickRandomWish();
+      msgBox.style.display = "block";
+      msgPrefix.textContent = `💌 Lời chúc dành cho ${userName}:`;
+      msgText.textContent = wish;
+      msgHint.textContent = "Chúc bạn một năm mới thật rực rỡ! ✨";
+      statusHint.textContent = "Kéo chuột để ngắm “bụi phép” bay lơ lửng.";
+
+      greetRow.textContent = `Gửi ${userName}, bạn đã bóc lì xì rồi!`;
+    }
+
+    window.addEventListener("pointerdown", (e)=>{
+      if (!hasStarted) return;
+      if (!hasOpened && hitEnvelope(e.clientX, e.clientY)) openEnvelope();
+    });
+
+    // =========================
+    // 10) ANIMATE
+    // =========================
+    const clock = new THREE.Clock();
+    let tAcc = 0;
+
+    function animate(){
+      const dt = Math.min(clock.getDelta(), 0.033);
+      tAcc += dt;
+
+      envelopeGroup.rotation.y = tAcc * 0.20;
+
+      envelope.mat.uniforms.uTime.value = tAcc;
+      envelope.pts.userData.updateMorph(dt);
+
+      controls.update();
+      composer.render();
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    // =========================
+    // 11) RESIZE
+    // =========================
+    addEventListener("resize", ()=>{
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize(innerWidth, innerHeight);
+      composer.setSize(innerWidth, innerHeight);
+
+      const pr = Math.min(devicePixelRatio, 2);
+      envelope.mat.uniforms.uPixelRatio.value = pr;
+      bloom.setSize(innerWidth, innerHeight);
+    });
+
+  </script>
+</body>
+</html>

@@ -1,3 +1,4 @@
+```html
 <!doctype html>
 <html lang="vi">
 <head>
@@ -17,7 +18,7 @@
     }
     .panel{
       margin-top:18px;
-      width:min(640px, calc(100vw - 24px));
+      width:min(680px, calc(100vw - 24px));
       background:rgba(0,0,0,.28);
       border:1px solid rgba(255,255,255,.08);
       border-radius:14px;
@@ -56,24 +57,7 @@
       cursor:pointer;
     }
     button:hover{ background:rgba(255,255,255,.12); }
-
-    .messageBox{
-      margin-top:12px;
-      padding:12px 12px;
-      border-radius:12px;
-      background:rgba(0,0,0,.30);
-      border:1px solid rgba(255,255,255,.08);
-      display:none;
-    }
-    .bigWish{
-      font-size:18px;
-      font-weight:700;
-      margin-top:8px;
-      line-height:1.35;
-    }
     .hint{ margin-top:8px; opacity:.85; }
- 
-
   </style>
 </head>
 <body>
@@ -91,11 +75,6 @@
 
       <div id="greetRow" class="muted" style="margin-top:10px; display:none;"></div>
 
-      <div id="msgBox" class="messageBox">
-        <div class="muted" id="msgPrefix"></div>
-        <div class="bigWish" id="msgText"></div>
-        <div class="hint muted" id="msgHint"></div>
-      </div>
       <div class="hint muted" id="statusHint" style="margin-top:10px;">
         Nhập tên → sau đó click vào bao lì xì để “bóc”.
       </div>
@@ -134,10 +113,6 @@
     // =========================
     const nameRow = document.getElementById("nameRow");
     const greetRow = document.getElementById("greetRow");
-    const msgBox = document.getElementById("msgBox");
-    const msgPrefix = document.getElementById("msgPrefix");
-    const msgText = document.getElementById("msgText");
-    const msgHint = document.getElementById("msgHint");
     const statusHint = document.getElementById("statusHint");
     const nameInput = document.getElementById("nameInput");
     const startBtn = document.getElementById("startBtn");
@@ -185,16 +160,16 @@
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 8;
-    controls.maxDistance = 45;
+    controls.maxDistance = 60;
     controls.target.set(0, 2.8, 0);
 
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
     const bloom = new UnrealBloomPass(
       new THREE.Vector2(innerWidth, innerHeight),
-      0.75, // strength
-      0.25, // radius
-      0.23  // threshold
+      0.75,
+      0.25,
+      0.23
     );
     composer.addPass(bloom);
 
@@ -222,14 +197,14 @@
     // =========================
     // 5) STARFIELD (DÀY)
     // =========================
-    function createStars(count = 32000){
+    function createStars(count = 42000){
       const positions = new Float32Array(count * 3);
       const colors = new Float32Array(count * 3);
 
       for(let i=0;i<count;i++){
-        const r = 150;
+        const r = 170;
         const d = Math.random();
-        const rr = r * Math.pow(d, 0.25); // bias về gần
+        const rr = r * Math.pow(d, 0.25);
 
         const a = Math.random() * Math.PI * 2;
         const b = Math.acos(2 * Math.random() - 1);
@@ -322,10 +297,8 @@
     }
 
     // =========================
-    // 7) ENVELOPE OUTLINE (KHÔNG MÉO)
+    // 7) ENVELOPE OUTLINE (PARTICLES)
     // =========================
-    function lerp(a,b,t){ return a + (b-a)*t; }
-
     function buildEnvelopePointsOutline({
       count = 17000,
       w = 6.0,
@@ -341,8 +314,8 @@
       const gold = new THREE.Color("#ffd24a");
 
       const bodyTopY = h/2;
-      const bodyBottomY = -h/2 + h*0.25;   // nâng đáy thân lên (đúng phong bì)
-      const innerY = h/2 - h*0.38;         // miệng phong bì
+      const bodyBottomY = -h/2 + h*0.25;
+      const innerY = h/2 - h*0.38;
 
       function edgePoint(x, y) {
         return {
@@ -366,24 +339,19 @@
           const pick = Math.random();
 
           if (pick < 0.22) {
-            // trái
             const p = edge(-w/2, bodyBottomY, -w/2, bodyTopY, t);
             p2 = edgePoint(p.x, p.y);
           } else if (pick < 0.44) {
-            // phải
             const p = edge(w/2, bodyBottomY, w/2, bodyTopY, t);
             p2 = edgePoint(p.x, p.y);
           } else if (pick < 0.62) {
-            // đáy thân
             const p = edge(-w/2, bodyBottomY, w/2, bodyBottomY, t);
             p2 = edgePoint(p.x, p.y);
-          } else   {
-            // trên ngoài
+          } else {
             const p = edge(-w/2, bodyTopY, w/2, bodyTopY, t);
             p2 = edgePoint(p.x, p.y);
-          } 
+          }
         } else {
-          // nắp tam giác (2 cạnh chéo)
           const t = Math.random();
           const A = { x: -w/2, y: bodyTopY };
           const B = { x:  w/2, y: bodyTopY };
@@ -422,192 +390,235 @@
       return { pts, mat };
     }
 
-    // Group
+    // Group (sẽ đứng yên sau khi mở)
     const envelopeGroup = new THREE.Group();
     scene.add(envelopeGroup);
 
     const envelope = buildEnvelopePointsOutline({ count: 17000, w: 6.0, h: 8.0, thickness: 0.18, centerY: 2.8 });
     envelopeGroup.add(envelope.pts);
-// =========================
-// 7.5) CHỮ "CUS" XOAY THEO PHONG BÌ (KHÔNG BILLBOARD)
-// =========================
-function makeTextPlane(text){
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-
-  canvas.width = 1024;
-  canvas.height = 512;
-
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.font = "900 140px system-ui, Segoe UI, Arial";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-
-  // glow
-  ctx.shadowColor = "rgba(255,210,74,0.9)";
-  ctx.shadowBlur = 40;
-  ctx.fillStyle = "#ffd24a";
-  ctx.fillText(text, canvas.width/2, canvas.height/2);
-
-  ctx.shadowColor = "rgba(255,80,0,0.6)";
-  ctx.shadowBlur = 80;
-  ctx.fillText(text, canvas.width/2, canvas.height/2);
-
-  ctx.shadowBlur = 0;
-  ctx.fillText(text, canvas.width/2, canvas.height/2);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-
-  const mat = new THREE.MeshBasicMaterial({
-    map: tex,
-    transparent: true,
-    depthWrite: false
-  });
-
-  const geo = new THREE.PlaneGeometry(6.8, 3.2);
-  return new THREE.Mesh(geo, mat);
-}
-
-// tạo chữ CUS mặt trước
-const cusFront = makeTextPlane("CUS");
-cusFront.position.set(0, 2.3, 0.6);   // z dương: mặt trước
-envelopeGroup.add(cusFront);
-
-// tạo chữ CUS mặt sau
-const cusBack = makeTextPlane("CUS");
-cusBack.position.set(0, 2.3, -0.6);   // z âm: mặt sau
-cusBack.rotation.y = Math.PI;         // xoay 180° để chữ không bị ngược
-envelopeGroup.add(cusBack);
-
-
-
-    // nền tối dưới
-    const groundGeo = new THREE.CircleGeometry(9.2, 96);
-    const groundMat = new THREE.MeshBasicMaterial({ color: 0x07071a, transparent:true, opacity:0.75 });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI/2;
-    ground.position.y = -0.12;
-    scene.add(ground);
 
     // =========================
-    // 8) MORPH -> DUST CLOUD (CLICK)
+    // 7.5) CHỮ "CUS" (1 MẶT) - biến mất khi mở
     // =========================
-    function makeMorphToCloud(points, {
-      cloudRadius = 8.2,
-      squashY = 0.70,
-      noise = 1.05,
-      morphSpeed = 8.0,
-      drift = 0.75,
-      recenter = 0.35,
-      center = new THREE.Vector3(0, 2.9, 0)
+    function makeTextPlane(text){
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = 1024;
+      canvas.height = 512;
+
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      ctx.font = "900 140px system-ui, Segoe UI, Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      ctx.shadowColor = "rgba(255,210,74,0.9)";
+      ctx.shadowBlur = 40;
+      ctx.fillStyle = "#ffd24a";
+      ctx.fillText(text, canvas.width/2, canvas.height/2);
+
+      ctx.shadowColor = "rgba(255,80,0,0.6)";
+      ctx.shadowBlur = 80;
+      ctx.fillText(text, canvas.width/2, canvas.height/2);
+
+      ctx.shadowBlur = 0;
+      ctx.fillText(text, canvas.width/2, canvas.height/2);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false
+      });
+
+      const geo = new THREE.PlaneGeometry(6.8, 3.2);
+      return new THREE.Mesh(geo, mat);
+    }
+
+    const cusText = makeTextPlane("CUS");
+    cusText.position.set(0, 2.3, 0.65);
+    envelopeGroup.add(cusText);
+
+    // =========================
+    // 7.6) WISH TEXT (1 MẶT) - fade in + căn dòng trong khung
+    // =========================
+    function wrapLines(ctx, text, maxWidth){
+      const words = text.split(/\s+/).filter(Boolean);
+      const lines = [];
+      let line = "";
+      for (const w of words) {
+        const test = line ? (line + " " + w) : w;
+        const m = ctx.measureText(test).width;
+        if (m <= maxWidth || !line) line = test;
+        else { lines.push(line); line = w; }
+      }
+      if (line) lines.push(line);
+      return lines.slice(0, 4); // tối đa 4 dòng
+    }
+
+    function makeWishPlaneDynamic({
+      w = 11.6,
+      h = 4.2,
+      font = "900 86px system-ui, Segoe UI, Arial",
+      fill = "#ffd24a"
     } = {}) {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      canvas.width = 2048;
+      canvas.height = 1024;
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0.0
+      });
+
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+
+      mesh.userData._canvas = canvas;
+      mesh.userData._ctx = ctx;
+      mesh.userData._tex = tex;
+      mesh.userData._font = font;
+      mesh.userData._fill = fill;
+
+      mesh.userData.setWish = (text)=>{
+        const c = mesh.userData._canvas;
+        const g = mesh.userData._ctx;
+
+        g.clearRect(0,0,c.width,c.height);
+
+        // nền trong suốt, chỉ chữ glow
+        g.font = mesh.userData._font;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+
+        const padX = 160;
+        const maxW = c.width - padX*2;
+
+        // wrap
+        const lines = wrapLines(g, text, maxW);
+
+        // canh giữa theo tổng chiều cao
+        const lineH = 116;
+        const totalH = lines.length * lineH;
+        let y = c.height/2 - totalH/2 + lineH/2;
+
+        // glow nhiều lớp
+        for (let pass=0; pass<3; pass++){
+          if (pass === 0) { g.shadowColor = "rgba(255,210,74,0.92)"; g.shadowBlur = 44; g.fillStyle = fill; }
+          if (pass === 1) { g.shadowColor = "rgba(255,120,0,0.65)"; g.shadowBlur = 90; g.fillStyle = fill; }
+          if (pass === 2) { g.shadowColor = "rgba(0,0,0,0)"; g.shadowBlur = 0; g.fillStyle = fill; }
+
+          y = c.height/2 - totalH/2 + lineH/2;
+          for (const ln of lines){
+            g.fillText(ln, c.width/2, y);
+            y += lineH;
+          }
+        }
+
+        mesh.userData._tex.needsUpdate = true;
+      };
+
+      mesh.userData.setWish(" ");
+      return mesh;
+    }
+
+    const wishPlane = makeWishPlaneDynamic({
+      w: 12.2,
+      h: 4.6,
+      font: "900 86px system-ui, Segoe UI, Arial"
+    });
+    // đặt lên “tờ giấy”
+    wishPlane.position.set(0, 2.9, 0.92);
+    envelopeGroup.add(wishPlane);
+
+    let wishTargetOpacity = 0.0;
+
+    // =========================
+    // 8) MORPH -> PAPER OUTLINE (GIẤY LỚN HƠN)
+    // =========================
+    function makeMorphToPaperOutline(points, {
+      paperW = 11.8,
+      paperH = 7.2,
+      thickness = 0.16,
+      morphSpeed = 7.5,
+      center = new THREE.Vector3(0, 2.9, 0),
+      zFront = 0.55
+    } = {}) {
+
       const posAttr = points.geometry.getAttribute("position");
       const count = posAttr.count;
 
       const base = new Float32Array(posAttr.array);
-      const cloud = new Float32Array(count * 3);
-      const cloud0 = new Float32Array(count * 3);
-      const vel = new Float32Array(count * 3);
+      const paper = new Float32Array(count * 3);
 
-      // tạo cloud dạng cụm
-      const nucleiCount = 18;
-      const nuclei = [];
-      for (let n=0;n<nucleiCount;n++){
-        const a = Math.random() * Math.PI * 2;
-        const b = Math.acos(2 * Math.random() - 1);
-        const rr = cloudRadius * (0.20 + 0.60*Math.random());
-        nuclei.push({
-          x: rr*Math.sin(b)*Math.cos(a),
-          y: rr*Math.cos(b)*squashY,
-          z: rr*Math.sin(b)*Math.sin(a)
-        });
+      function edge(x1,y1,x2,y2,t){
+        return { x: x1 + (x2-x1)*t, y: y1 + (y2-y1)*t };
       }
+      function jitter(v, j=0.03){
+        return v + (Math.random()*2-1)*j;
+      }
+
+      const halfW = paperW/2;
+      const halfH = paperH/2;
 
       for (let i=0;i<count;i++){
         const ix = i*3;
-        const k = (Math.random()*nucleiCount)|0;
-        const n = nuclei[k];
+        const t = Math.random();
+        const pick = Math.random();
 
-        const spread = 0.9 + Math.random()*1.15;
-        let x = n.x + (Math.random()*2-1)*noise*spread;
-        let y = n.y + (Math.random()*2-1)*noise*spread*0.9;
-        let z = n.z + (Math.random()*2-1)*noise*spread;
+        let p;
+        if (pick < 0.25) p = edge(-halfW, -halfH, -halfW, halfH, t);
+        else if (pick < 0.50) p = edge(halfW, -halfH, halfW, halfH, t);
+        else if (pick < 0.75) p = edge(-halfW, -halfH, halfW, -halfH, t);
+        else p = edge(-halfW, halfH, halfW, halfH, t);
 
-        x += center.x; y += center.y; z += center.z;
-
-        cloud[ix+0]=x; cloud[ix+1]=y; cloud[ix+2]=z;
-        cloud0[ix+0]=x; cloud0[ix+1]=y; cloud0[ix+2]=z;
-
-        vel[ix+0] = (Math.random()*2-1)*drift;
-        vel[ix+1] = (Math.random()*2-1)*drift*0.55;
-        vel[ix+2] = (Math.random()*2-1)*drift;
+        paper[ix+0] = jitter(p.x, 0.040) + center.x;
+        paper[ix+1] = jitter(p.y, 0.040) + center.y;
+        paper[ix+2] = (Math.random()*2-1)*thickness + zFront;
       }
 
-      points.userData.__morph = {
-        posAttr, count, base, cloud, cloud0, vel,
+      points.userData.__morph2 = {
+        posAttr, count, base, paper,
         mode: "base",
         mix: 0,
-        morphSpeed, drift, recenter
+        morphSpeed
       };
 
-      points.userData.toCloud = ()=>{ points.userData.__morph.mode = "cloud"; };
-      points.userData.toBase  = ()=>{ points.userData.__morph.mode = "base"; };
-
-      points.userData.updateMorph = (dt)=>{
-        const st = points.userData.__morph;
+      points.userData.toPaper = ()=>{ points.userData.__morph2.mode = "paper"; };
+      points.userData.updateMorph2 = (dt)=>{
+        const st = points.userData.__morph2;
         const arr = st.posAttr.array;
 
-        const target = (st.mode === "cloud") ? 1 : 0;
-        const speed  = (st.mode === "cloud") ? st.morphSpeed : 2.2;
-        st.mix += (target - st.mix) * (1.0 - Math.exp(-speed * dt));
-
-        const inCloud = st.mix > 0.02;
-        const swirl = (st.mode === "cloud") ? 0.45 : 0.0;
+        const target = (st.mode === "paper") ? 1 : 0;
+        st.mix += (target - st.mix) * (1.0 - Math.exp(-st.morphSpeed * dt));
 
         for (let i=0;i<st.count;i++){
           const ix = i*3;
           const bx = st.base[ix+0], by = st.base[ix+1], bz = st.base[ix+2];
+          const px = st.paper[ix+0], py = st.paper[ix+1], pz = st.paper[ix+2];
 
-          let cx = st.cloud[ix+0], cy = st.cloud[ix+1], cz = st.cloud[ix+2];
-
-          if (inCloud) {
-            cx += st.vel[ix+0] * dt;
-            cy += st.vel[ix+1] * dt;
-            cz += st.vel[ix+2] * dt;
-
-            // swirl nhẹ
-            const x = cx, z = cz;
-            const a = swirl * dt;
-            cx = x*Math.cos(a) - z*Math.sin(a);
-            cz = x*Math.sin(a) + z*Math.cos(a);
-
-            // kéo về cụm gốc
-            const c0x = st.cloud0[ix+0], c0y = st.cloud0[ix+1], c0z = st.cloud0[ix+2];
-            cx += (c0x - cx) * st.recenter * dt;
-            cy += (c0y - cy) * st.recenter * dt;
-            cz += (c0z - cz) * st.recenter * dt;
-
-            st.cloud[ix+0]=cx; st.cloud[ix+1]=cy; st.cloud[ix+2]=cz;
-          }
-
-          arr[ix+0] = bx + (cx - bx) * st.mix;
-          arr[ix+1] = by + (cy - by) * st.mix;
-          arr[ix+2] = bz + (cz - bz) * st.mix;
+          arr[ix+0] = bx + (px - bx) * st.mix;
+          arr[ix+1] = by + (py - by) * st.mix;
+          arr[ix+2] = bz + (pz - bz) * st.mix;
         }
 
         st.posAttr.needsUpdate = true;
       };
     }
 
-    makeMorphToCloud(envelope.pts, {
-      cloudRadius: 8.5,
-      squashY: 0.70,
-      noise: 1.10,
-      morphSpeed: 8.5,
-      drift: 0.85,
-      recenter: 0.38,
-      center: new THREE.Vector3(0, 2.95, 0)
+    makeMorphToPaperOutline(envelope.pts, {
+      paperW: 11.8,
+      paperH: 7.2,
+      thickness: 0.16,
+      morphSpeed: 7.5,
+      center: new THREE.Vector3(0, 2.9, 0),
+      zFront: 0.55
     });
 
     // =========================
@@ -635,19 +646,30 @@ envelopeGroup.add(cusBack);
       return (localX >= -halfW && localX <= halfW && localY >= -halfH && localY <= halfH);
     }
 
+    // =========================
+    // 10) OPEN
+    // =========================
+    let stopRotation = false;
+
     function openEnvelope(){
       if (!hasStarted || hasOpened) return;
       hasOpened = true;
 
-      envelope.pts.userData.toCloud();
+      // dừng xoay sau khi mở
+      stopRotation = true;
 
+      // ẩn CUS
+      cusText.visible = false;
+
+      // morph thành tờ giấy (khung)
+      envelope.pts.userData.toPaper();
+
+      // set lời chúc (dạng ánh đèn) + fade in
       const wish = pickRandomWish();
-      msgBox.style.display = "block";
-      msgPrefix.textContent = `💌 Lời chúc dành cho ${userName}:`;
-      msgText.textContent = wish;
-      msgHint.textContent = "Chúc bạn một năm mới thật rực rỡ! ✨";
-      statusHint.textContent = "Kéo chuột để ngắm “bụi phép” bay lơ lửng.";
+      wishPlane.userData.setWish(wish);
+      wishTargetOpacity = 1.0;
 
+      statusHint.textContent = "✨ Lời chúc đang hiện lên…";
       greetRow.textContent = `Gửi ${userName}, bạn đã bóc lì xì rồi!`;
     }
 
@@ -657,7 +679,7 @@ envelopeGroup.add(cusBack);
     });
 
     // =========================
-    // 10) ANIMATE
+    // 11) ANIMATE
     // =========================
     const clock = new THREE.Clock();
     let tAcc = 0;
@@ -666,10 +688,14 @@ envelopeGroup.add(cusBack);
       const dt = Math.min(clock.getDelta(), 0.033);
       tAcc += dt;
 
-      envelopeGroup.rotation.y = tAcc * 0.20;
+      if (!stopRotation) envelopeGroup.rotation.y = tAcc * 0.20;
 
       envelope.mat.uniforms.uTime.value = tAcc;
-      envelope.pts.userData.updateMorph(dt);
+      envelope.pts.userData.updateMorph2(dt);
+
+      // fade in lời chúc
+      const sp = 1.55;
+      wishPlane.material.opacity += (wishTargetOpacity - wishPlane.material.opacity) * (1.0 - Math.exp(-sp * dt));
 
       controls.update();
       composer.render();
@@ -678,7 +704,7 @@ envelopeGroup.add(cusBack);
     animate();
 
     // =========================
-    // 11) RESIZE
+    // 12) RESIZE
     // =========================
     addEventListener("resize", ()=>{
       camera.aspect = innerWidth / innerHeight;
@@ -691,7 +717,7 @@ envelopeGroup.add(cusBack);
       envelope.mat.uniforms.uPixelRatio.value = pr;
       bloom.setSize(innerWidth, innerHeight);
     });
-
   </script>
 </body>
 </html>
+```
